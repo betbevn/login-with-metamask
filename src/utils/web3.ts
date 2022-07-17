@@ -1,15 +1,8 @@
 import Web3 from "web3";
 
-export const signatureMessage = async (
-  publicAddress: string,
-  nonce: number
-) => {
+export const signatureMessage = async (msg: string, address: string) => {
   const web3 = new Web3(window.ethereum);
-  return await web3.eth.personal.sign(
-    `TEXT SYNC WITH FRONT END: ${nonce}`,
-    publicAddress,
-    ""
-  );
+  return await web3.eth.personal.sign(msg, address, "");
 };
 
 export const getAccounts = async () => {

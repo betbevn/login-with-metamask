@@ -8,9 +8,9 @@ import {
   setAccountSession,
   signatureMessage,
 } from "./utils/web3";
-import { get, post } from "./api";
-import { API_AUTHENTICATE, API_FIND_ADDRESS, API_SIGN_UP } from "./utils/const";
-import HomePage from "./containers/homepage";
+import { post } from "./api";
+import { API_AUTHENTICATE, API_SIGN_UP } from "./utils/const";
+import CryptoJS from "crypto-js";
 
 function App() {
   const { ethereum, isInstalledMetamask, accounts } = useMetaMask();
@@ -29,7 +29,7 @@ function App() {
         signature: data.signature,
       })
         .then((res) => {
-          setAccountSession({ account: data.address, token: res.data.token });
+          console.log(res, "res");
         })
         .catch((error) => {
           console.log(error);
@@ -39,32 +39,15 @@ function App() {
   );
 
   const handleSignMessage = useCallback(
-    async (data: { nonce: number; address: string }) => {
+    async (msg: string, address: string) => {
       try {
-        const signature = await signatureMessage(data.address, data.nonce);
-        return { address: data.address, signature };
+        const signature = await signatureMessage(msg, address);
+        return { address, signature };
       } catch (err) {
         throw new Error("You need to sign the message to be able to log in.");
       }
     },
     []
-  );
-
-  const handleSignup = useCallback(
-    (address: string) => {
-      post(API_SIGN_UP, { address })
-        .then((res) =>
-          handleSignMessage({
-            address: res.data.data.address,
-            nonce: res.data.data.nonce,
-          })
-        )
-        .then(handleAuthenticate)
-        .catch((error) => {
-          console.log(error, "error");
-        });
-    },
-    [handleAuthenticate, handleSignMessage]
   );
 
   const handleConnect = useCallback(async () => {
@@ -77,29 +60,34 @@ function App() {
       method: "eth_requestAccounts",
     });
     setAcc(newAccounts);
+    setAccountSession(newAccounts[0]);
 
-    await get(API_FIND_ADDRESS, {
-      publicAddress: newAccounts[0],
+    await post(API_SIGN_UP, {
+      address: newAccounts[0],
     })
       .then((response) => {
-        return handleSignMessage({
-          address: newAccounts[0],
-          nonce: response.data.nonce,
-        });
+        if (response.data.isSigned) {
+          const signature = CryptoJS.AES.encrypt(
+            newAccounts[0],
+            response.data.nonce
+          ).toString();
+
+          return {
+            address: newAccounts[0],
+            signature,
+          };
+        } else {
+          return handleSignMessage(
+            response.data.message,
+            response.data.address
+          );
+        }
       })
       .then(handleAuthenticate)
       .catch((error) => {
-        if (error.response.data.message === "Address does not exist") {
-          handleSignup(newAccounts[0]);
-        }
+        console.log(error, "error");
       });
-  }, [
-    ethereum,
-    handleAuthenticate,
-    handleSignMessage,
-    handleSignup,
-    isInstalledMetamask,
-  ]);
+  }, [ethereum, handleAuthenticate, handleSignMessage, isInstalledMetamask]);
 
   const handleDisconnect = useCallback(() => {
     setAcc([]);
@@ -120,7 +108,6 @@ function App() {
       >
         {acc.length > 0 ? "Disconnect" : "Connect"}
       </Button>
-      <HomePage />
     </div>
   );
 }
